@@ -160,15 +160,14 @@ public class FixParserApp extends JFrame {
                         totalFields += result.getFields().size();
                     } else {
                         errorCount++;
-                        // Add error row to table
                         tableModel.addRow(new Object[]{messageCount, "ERROR", "Parse Error", result.getError()});
                     }
                 }
                 
                 if (errorCount == 0) {
-                    statusLabel.setText(String.format("Successfully parsed %d messages - %d total fields found", messageCount, totalFields));
+                    statusLabel.setText(String.format("Successfully parsed %d messages", messageCount));
                 } else {
-                    statusLabel.setText(String.format("Parsed %d messages (%d errors) - %d total fields found", messageCount, errorCount, totalFields));
+                    statusLabel.setText(String.format("Parsed %d messages (%d errors)", messageCount, errorCount));
                 }
                 
             } catch (Exception ex) {
