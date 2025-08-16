@@ -1,4 +1,4 @@
-# FIX Parser Java Application
+# FIXParserJ
 
 A Java Swing application that uses QuickFIX/J to parse FIX (Financial Information eXchange) messages with a graphical interface.
 
@@ -18,6 +18,7 @@ java -jar target/fixparser-app.jar
 ### Option 2: Build from Source
 ```bash
 # Clone or download the project
+git clone https://github.com/mrtkp9993/fixparserj
 cd fixparserj
 
 # Build the project
