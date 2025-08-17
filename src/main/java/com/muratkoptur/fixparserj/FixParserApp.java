@@ -2,21 +2,143 @@ package com.muratkoptur.fixparserj;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.table.DefaultTableModel;
+import javax.swing.tree.DefaultMutableTreeNode;
+import javax.swing.tree.DefaultTreeModel;
+import javax.swing.tree.TreePath;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
 import java.util.Map;
 
 public class FixParserApp extends JFrame {
     
     private JTextArea inputTextArea;
-    private JTable fieldsTable;
-    private DefaultTableModel tableModel;
+    private JTree resultsTree;
+    private DefaultTreeModel treeModel;
     private JLabel statusLabel;
     
     public FixParserApp() {
         initializeGUI();
+        createMenuBar();
+    }
+    
+    private void createMenuBar() {
+        JMenuBar menuBar = new JMenuBar();
+        
+        // File Menu
+        JMenu fileMenu = new JMenu("File");
+        fileMenu.setMnemonic('F');
+        
+        JMenuItem openMenuItem = new JMenuItem("Open...", 'O');
+        openMenuItem.setAccelerator(KeyStroke.getKeyStroke("control O"));
+        openMenuItem.addActionListener(e -> openFile());
+        
+        JMenuItem exitMenuItem = new JMenuItem("Exit", 'X');
+        exitMenuItem.addActionListener(e -> System.exit(0));
+        
+        fileMenu.add(openMenuItem);
+        fileMenu.addSeparator();
+        fileMenu.add(exitMenuItem);
+        
+        // About Menu
+        JMenu aboutMenu = new JMenu("About");
+        aboutMenu.setMnemonic('A');
+        
+        JMenuItem aboutMenuItem = new JMenuItem("About FIXParserJ", 'A');
+        aboutMenuItem.addActionListener(e -> showAboutDialog());
+        
+        aboutMenu.add(aboutMenuItem);
+        
+        menuBar.add(fileMenu);
+        menuBar.add(aboutMenu);
+        
+        setJMenuBar(menuBar);
+    }
+    
+    private void openFile() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
+        
+        int result = fileChooser.showOpenDialog(this);
+        if (result == JFileChooser.APPROVE_OPTION) {
+            File selectedFile = fileChooser.getSelectedFile();
+            try {
+                StringBuilder content = new StringBuilder();
+                try (BufferedReader reader = new BufferedReader(new FileReader(selectedFile))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        content.append(line).append("\n");
+                    }
+                }
+                inputTextArea.setText(content.toString());
+                statusLabel.setText("File loaded: " + selectedFile.getName());
+            } catch (IOException ex) {
+                JOptionPane.showMessageDialog(this, 
+                    "Error reading file: " + ex.getMessage(), 
+                    "File Error", 
+                    JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+    
+    private void showAboutDialog() {
+        JDialog aboutDialog = new JDialog(this, "About FIXParserJ", true);
+        aboutDialog.setLayout(new BorderLayout());
+        aboutDialog.setSize(400, 300);
+        aboutDialog.setLocationRelativeTo(this);
+        aboutDialog.setResizable(false);
+        
+        JPanel contentPanel = new JPanel();
+        contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.Y_AXIS));
+        contentPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+        
+        JLabel titleLabel = new JLabel("FIXParserJ");
+        titleLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 18));
+        titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        
+        JLabel websiteLabel = new JLabel("Website:");
+        websiteLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        
+        JLabel linkLabel = new JLabel("muratkoptur.com");
+        linkLabel.setForeground(Color.BLUE);
+        linkLabel.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        linkLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        linkLabel.setFont(linkLabel.getFont().deriveFont(Font.PLAIN));
+        
+        linkLabel.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                try {
+                    java.awt.Desktop.getDesktop().browse(new java.net.URI("https://muratkoptur.com"));
+                } catch (Exception e) {
+                    JOptionPane.showMessageDialog(aboutDialog, 
+                        "Could not open website: " + e.getMessage(), 
+                        "Error", 
+                        JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        });
+        
+        contentPanel.add(titleLabel);
+        contentPanel.add(Box.createVerticalStrut(15));
+        contentPanel.add(websiteLabel);
+        contentPanel.add(Box.createVerticalStrut(5));
+        contentPanel.add(linkLabel);
+        
+        JButton closeButton = new JButton("Close");
+        closeButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+        closeButton.addActionListener(e -> aboutDialog.dispose());
+        
+        JPanel buttonPanel = new JPanel();
+        buttonPanel.add(closeButton);
+        
+        aboutDialog.add(contentPanel, BorderLayout.CENTER);
+        aboutDialog.add(buttonPanel, BorderLayout.SOUTH);
+        
+        aboutDialog.setVisible(true);
     }
     
     private void initializeGUI() {
@@ -80,24 +202,42 @@ public class FixParserApp extends JFrame {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBorder(BorderFactory.createTitledBorder("Parse Results"));
         
-        tableModel = new DefaultTableModel(new String[]{"Message #", "Tag", "Field Name", "Value"}, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) {
-                return false;
-            }
-        };
-        fieldsTable = new JTable(tableModel);
-        fieldsTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        fieldsTable.getColumnModel().getColumn(0).setPreferredWidth(80);
-        fieldsTable.getColumnModel().getColumn(1).setPreferredWidth(80);
-        fieldsTable.getColumnModel().getColumn(2).setPreferredWidth(200);
-        fieldsTable.getColumnModel().getColumn(3).setPreferredWidth(300);
+        DefaultMutableTreeNode rootNode = new DefaultMutableTreeNode("FIX Messages");
+        treeModel = new DefaultTreeModel(rootNode);
+        resultsTree = new JTree(treeModel);
         
-        JScrollPane tableScrollPane = new JScrollPane(fieldsTable);
+        resultsTree.setRootVisible(false);
+        resultsTree.setShowsRootHandles(true);
+        resultsTree.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
         
-        panel.add(tableScrollPane, BorderLayout.CENTER);
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JButton expandAllButton = new JButton("Expand All");
+        JButton collapseAllButton = new JButton("Collapse All");
+        
+        expandAllButton.addActionListener(e -> expandAllNodes());
+        collapseAllButton.addActionListener(e -> collapseAllNodes());
+        
+        buttonPanel.add(expandAllButton);
+        buttonPanel.add(collapseAllButton);
+        
+        JScrollPane treeScrollPane = new JScrollPane(resultsTree);
+        
+        panel.add(buttonPanel, BorderLayout.NORTH);
+        panel.add(treeScrollPane, BorderLayout.CENTER);
         
         return panel;
+    }
+    
+    private void expandAllNodes() {
+        for (int i = 0; i < resultsTree.getRowCount(); i++) {
+            resultsTree.expandRow(i);
+        }
+    }
+    
+    private void collapseAllNodes() {
+        for (int i = resultsTree.getRowCount() - 1; i >= 0; i--) {
+            resultsTree.collapseRow(i);
+        }
     }
     
     private JPanel createStatusPanel() {
@@ -110,7 +250,9 @@ public class FixParserApp extends JFrame {
     
     private void clearAll() {
         inputTextArea.setText("");
-        tableModel.setRowCount(0);
+        treeModel.setRoot((DefaultMutableTreeNode) treeModel.getRoot());
+        ((DefaultMutableTreeNode) treeModel.getRoot()).removeAllChildren();
+        treeModel.reload();
         statusLabel.setText("Ready to parse FIX messages");
     }
     
@@ -139,10 +281,11 @@ public class FixParserApp extends JFrame {
                 statusLabel.setText("Parsing messages...");
                 
                 String[] lines = inputText.split("\n");
-                tableModel.setRowCount(0);
+                
+                DefaultMutableTreeNode rootNode = (DefaultMutableTreeNode) treeModel.getRoot();
+                rootNode.removeAllChildren();
                 
                 int messageCount = 0;
-                int totalFields = 0;
                 int errorCount = 0;
                 
                 for (int i = 0; i < lines.length; i++) {
@@ -157,12 +300,16 @@ public class FixParserApp extends JFrame {
                     
                     if (result.isSuccess()) {
                         displayResults(result.getFields(), messageCount);
-                        totalFields += result.getFields().size();
                     } else {
                         errorCount++;
-                        tableModel.addRow(new Object[]{messageCount, "ERROR", "Parse Error", result.getError()});
+                        DefaultMutableTreeNode errorNode = new DefaultMutableTreeNode("Message " + messageCount + " (ERROR)");
+                        DefaultMutableTreeNode errorDetailNode = new DefaultMutableTreeNode("Parse Error: " + result.getError());
+                        errorNode.add(errorDetailNode);
+                        rootNode.add(errorNode);
                     }
                 }
+                
+                treeModel.reload();
                 
                 if (errorCount == 0) {
                     statusLabel.setText(String.format("Successfully parsed %d messages", messageCount));
@@ -183,14 +330,21 @@ public class FixParserApp extends JFrame {
     }
     
     private void displayResults(Map<String, String> fields, int messageNumber) {
+        DefaultMutableTreeNode rootNode = (DefaultMutableTreeNode) treeModel.getRoot();
+        DefaultMutableTreeNode messageNode = new DefaultMutableTreeNode("Message " + messageNumber);
+        
         for (Map.Entry<String, String> entry : fields.entrySet()) {
             String tag = entry.getKey();
             String value = entry.getValue();
             String fieldName = Parser.getFieldName(tag);
             String displayValue = Parser.getFieldValueWithEnum(tag, value);
             
-            tableModel.addRow(new Object[]{messageNumber, tag, fieldName, displayValue});
+            String fieldText = String.format("Tag %s (%s): %s", tag, fieldName, displayValue);
+            DefaultMutableTreeNode fieldNode = new DefaultMutableTreeNode(fieldText);
+            messageNode.add(fieldNode);
         }
+        
+        rootNode.add(messageNode);
     }
     
     public static void main(String[] args) {
