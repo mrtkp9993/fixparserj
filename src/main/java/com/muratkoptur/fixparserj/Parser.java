@@ -1,16 +1,9 @@
 package com.muratkoptur.fixparserj;
 
-import java.util.HashMap;
-import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.io.InputStream;
 
-import quickfix.DefaultMessageFactory;
-import quickfix.Field;
-import quickfix.InvalidMessage;
-import quickfix.Message;
-import quickfix.MessageUtils;
-import quickfix.field.ApplVerID;
 import quickfix.DataDictionary;
 import quickfix.ConfigError;
 
@@ -21,7 +14,7 @@ public class Parser {
         initializeDataDictionary();
     }
 
-    public static ParseResult parse(String fixString) throws InvalidMessage {
+    public static ParseResult parse(String fixString) {
         if (fixString == null || fixString.trim().isEmpty()) {
             throw new IllegalArgumentException("Input string is null or empty");
         }
@@ -29,39 +22,16 @@ public class Parser {
         try {
             String normalizedFixString = normalizeFixMessage(fixString);
 
-            Message message = new Message(normalizedFixString);
-            Map<String, String> fields = new HashMap<>();
-            
-            Iterator<Field<?>> headerIterator = message.getHeader().iterator();
-            while (headerIterator.hasNext()) {
-                int tag = headerIterator.next().getTag();
-                try {
-                    String value = message.getHeader().getString(tag);
-                    fields.put(String.valueOf(tag), value);
-                } catch (Exception e) {
-                    fields.put(String.valueOf(tag), "[unable to read]");
-                }
-            }
+            Map<String, String> fields = new LinkedHashMap<>();
 
-            Iterator<Field<?>> bodyIterator = message.iterator();
-            while (bodyIterator.hasNext()) {
-                int tag = bodyIterator.next().getTag();
-                try {
-                    String value = message.getString(tag);
-                    fields.put(String.valueOf(tag), value);
-                } catch (Exception e) {
-                    fields.put(String.valueOf(tag), "[unable to read]");
-                }
-            }
-
-            Iterator<Field<?>> trailerIterator = message.getTrailer().iterator();
-            while (trailerIterator.hasNext()) {
-                int tag = trailerIterator.next().getTag();
-                try {
-                    String value = message.getTrailer().getString(tag);
-                    fields.put(String.valueOf(tag), value);
-                } catch (Exception e) {
-                    fields.put(String.valueOf(tag), "[unable to read]");
+            String[] pairs = normalizedFixString.split("\u0001");
+            for (String pair : pairs) {
+                if (pair.isEmpty()) continue;
+                int idx = pair.indexOf('=');
+                if (idx > 0 && idx < pair.length() - 1) {
+                    String tag = pair.substring(0, idx);
+                    String value = pair.substring(idx + 1);
+                    fields.put(tag, value);
                 }
             }
 
