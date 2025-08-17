@@ -6,7 +6,7 @@ A Java Swing application that uses QuickFIX/J to parse FIX (Financial Informatio
 
 ## Requirements
 
-- Java 21 or higher
+- Java 17 or higher
 
 ## Installation and Usage
 
