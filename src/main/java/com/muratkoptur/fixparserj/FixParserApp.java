@@ -15,9 +15,13 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import javax.swing.RowFilter;
 
 public class FixParserApp extends JFrame {
 
@@ -28,6 +32,8 @@ public class FixParserApp extends JFrame {
     private DefaultTableModel tableModel;
     private List<Map<String, String>> parsedMessages;
     private JLabel statusLabel;
+    private JTextField searchField;
+    private TableRowSorter<DefaultTableModel> tableSorter;
 
     public FixParserApp() {
         initializeGUI();
@@ -252,6 +258,14 @@ public class FixParserApp extends JFrame {
             public boolean isCellEditable(int row, int column) {
                 return false;
             }
+
+            @Override
+            public Class<?> getColumnClass(int columnIndex) {
+                if (columnIndex == 0) {
+                    return Integer.class;
+                }
+                return String.class;
+            }
         };
         resultsTable = new JTable(tableModel);
         resultsTable.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
@@ -261,8 +275,30 @@ public class FixParserApp extends JFrame {
         resultsTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         resultsTable.setFillsViewportHeight(true);
 
+        JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        searchPanel.add(new JLabel("Search: "));
+        searchField = new JTextField(30);
+        searchField.getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent e) {
+                filterTable();
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent e) {
+                filterTable();
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent e) {
+                filterTable();
+            }
+        });
+        searchPanel.add(searchField);
+
         JScrollPane tableScrollPane = new JScrollPane(resultsTable);
         tableScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        tablePanel.add(searchPanel, BorderLayout.NORTH);
         tablePanel.add(tableScrollPane, BorderLayout.CENTER);
 
         tabbedPane.addTab("Tree View", treePanel);
@@ -369,13 +405,19 @@ public class FixParserApp extends JFrame {
                     }
                 }
 
+                int dupCount = deduplicateByMsgSeqNum();
+
                 buildTableView();
                 treeModel.reload();
 
-                if (errorCount == 0) {
-                    statusLabel.setText(String.format("Successfully parsed %d messages", messageCount));
+                if (errorCount == 0 && dupCount == 0) {
+                    statusLabel.setText(String.format("Successfully parsed %d messages", parsedMessages.size()));
+                } else if (dupCount > 0) {
+                    statusLabel.setText(String.format("Parsed %d messages (%d duplicates removed, %d errors)",
+                            parsedMessages.size(), dupCount, errorCount));
                 } else {
-                    statusLabel.setText(String.format("Parsed %d messages (%d errors)", messageCount, errorCount));
+                    statusLabel.setText(
+                            String.format("Parsed %d messages (%d errors)", parsedMessages.size(), errorCount));
                 }
 
             } catch (Exception ex) {
@@ -432,7 +474,6 @@ public class FixParserApp extends JFrame {
             tableModel.addColumn(col);
         }
 
-        // Add one row per message
         for (int m = 0; m < parsedMessages.size(); m++) {
             Map<String, String> fields = parsedMessages.get(m);
             Object[] row = new Object[tagList.size() + 1];
@@ -449,12 +490,80 @@ public class FixParserApp extends JFrame {
             tableModel.addRow(row);
         }
 
-        TableRowSorter<DefaultTableModel> sorter = new TableRowSorter<>(tableModel);
-        resultsTable.setRowSorter(sorter);
+        tableSorter = new TableRowSorter<>(tableModel);
+        resultsTable.setRowSorter(tableSorter);
         resultsTable.getColumnModel().getColumn(0).setPreferredWidth(70);
         for (int i = 1; i < resultsTable.getColumnCount(); i++) {
             resultsTable.getColumnModel().getColumn(i).setPreferredWidth(140);
         }
+    }
+
+    private void filterTable() {
+        if (tableSorter == null)
+            return;
+        String text = searchField.getText().trim();
+        if (text.isEmpty()) {
+            tableSorter.setRowFilter(null);
+        } else {
+            tableSorter.setRowFilter(RowFilter.regexFilter("(?i)" + java.util.regex.Pattern.quote(text)));
+        }
+    }
+
+    private int deduplicateByMsgSeqNum() {
+        if (parsedMessages == null || parsedMessages.isEmpty())
+            return 0;
+
+        LinkedHashMap<String, List<Map<String, String>>> seqNumGroups = new LinkedHashMap<>();
+        for (Map<String, String> msg : parsedMessages) {
+            String seqNum = msg.get("34");
+            if (seqNum == null)
+                seqNum = "";
+            seqNumGroups.computeIfAbsent(seqNum, k -> new ArrayList<>()).add(msg);
+        }
+
+        List<String> conflictSeqNums = new ArrayList<>();
+        List<Map<String, String>> dedupedMessages = new ArrayList<>();
+        int dupCount = 0;
+
+        for (Map.Entry<String, List<Map<String, String>>> entry : seqNumGroups.entrySet()) {
+            List<Map<String, String>> group = entry.getValue();
+            if (group.size() == 1) {
+                dedupedMessages.add(group.get(0));
+            } else {
+                boolean allIdentical = true;
+                Map<String, String> first = group.get(0);
+                for (int i = 1; i < group.size(); i++) {
+                    if (!first.equals(group.get(i))) {
+                        allIdentical = false;
+                        break;
+                    }
+                }
+                if (allIdentical) {
+                    dedupedMessages.add(first);
+                    dupCount += group.size() - 1;
+                } else {
+                    conflictSeqNums.add(entry.getKey());
+                    dedupedMessages.addAll(group);
+                }
+            }
+        }
+
+        if (!conflictSeqNums.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "Some messages share the same MsgSeqNum (tag 34) but have different content.",
+                    "Duplicate MsgSeqNum Conflict",
+                    JOptionPane.ERROR_MESSAGE);
+        }
+
+        parsedMessages = dedupedMessages;
+
+        DefaultMutableTreeNode rootNode = (DefaultMutableTreeNode) treeModel.getRoot();
+        rootNode.removeAllChildren();
+        for (int i = 0; i < parsedMessages.size(); i++) {
+            displayResults(parsedMessages.get(i), i + 1);
+        }
+
+        return dupCount;
     }
 
     public static void main(String[] args) {

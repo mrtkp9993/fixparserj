@@ -9,7 +9,7 @@ import quickfix.ConfigError;
 
 public class Parser {
     private static DataDictionary dataDictionary;
-    
+
     static {
         initializeDataDictionary();
     }
@@ -26,17 +26,18 @@ public class Parser {
 
             String[] pairs = normalizedFixString.split("\u0001");
             for (String pair : pairs) {
-                if (pair.isEmpty()) continue;
+                if (pair.isEmpty())
+                    continue;
                 int idx = pair.indexOf('=');
                 if (idx > 0 && idx < pair.length() - 1) {
-                    String tag = pair.substring(0, idx);
-                    String value = pair.substring(idx + 1);
+                    String tag = pair.substring(0, idx).trim();
+                    String value = pair.substring(idx + 1).trim();
                     fields.put(tag, value);
                 }
             }
 
             return new ParseResult(true, null, fields);
-            
+
         } catch (Exception e) {
             return new ParseResult(false, "Failed to parse FIX message: " + e.getMessage(), null);
         }
@@ -44,20 +45,20 @@ public class Parser {
 
     private static String normalizeFixMessage(String fixString) {
         String normalized = fixString;
-        
+
         normalized = normalized.replace("|", "\u0001");
         normalized = normalized.replace("^", "\u0001");
         normalized = normalized.replace("␁", "\u0001");
         normalized = normalized.replace("\\001", "\u0001");
         normalized = normalized.replace("<SOH>", "\u0001");
-        
+
         if (!normalized.endsWith("\u0001")) {
             normalized += "\u0001";
         }
-        
+
         return normalized;
     }
-    
+
     private static void initializeDataDictionary() {
         try {
             InputStream ddStream = Parser.class.getClassLoader().getResourceAsStream("FIX50.xml");
@@ -73,7 +74,7 @@ public class Parser {
             dataDictionary = null;
         }
     }
-    
+
     public static String getFieldName(String tag) {
         if (dataDictionary != null) {
             try {
@@ -86,10 +87,10 @@ public class Parser {
                 System.err.println("Invalid tag: " + tag + " - " + e.getMessage());
             }
         }
-        
+
         return "Tag_" + tag;
     }
-    
+
     public static String getFieldValueWithEnum(String tag, String value) {
         if (dataDictionary != null && value != null && !value.isEmpty()) {
             try {
@@ -104,7 +105,7 @@ public class Parser {
                 // Field might not have enums or other error, just return original value
             }
         }
-        
+
         return value;
     }
 
@@ -127,7 +128,7 @@ public class Parser {
             return error;
         }
 
-        public Map<String,String> getFields() {
+        public Map<String, String> getFields() {
             return fields;
         }
     }
