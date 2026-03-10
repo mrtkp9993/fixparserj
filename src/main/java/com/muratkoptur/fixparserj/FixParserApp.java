@@ -11,8 +11,16 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
+
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.FillPatternType;
+import org.apache.poi.ss.usermodel.IndexedColors;
+import org.apache.poi.xssf.usermodel.XSSFFont;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -57,10 +65,15 @@ public class FixParserApp extends JFrame {
         openMenuItem.setAccelerator(KeyStroke.getKeyStroke("control O"));
         openMenuItem.addActionListener(e -> openFile());
 
+        JMenuItem exportMenuItem = new JMenuItem("Export to Excel...", 'E');
+        exportMenuItem.setAccelerator(KeyStroke.getKeyStroke("control E"));
+        exportMenuItem.addActionListener(e -> exportToExcel());
+
         JMenuItem exitMenuItem = new JMenuItem("Exit", 'X');
         exitMenuItem.addActionListener(e -> System.exit(0));
 
         fileMenu.add(openMenuItem);
+        fileMenu.add(exportMenuItem);
         fileMenu.addSeparator();
         fileMenu.add(exitMenuItem);
 
@@ -597,6 +610,82 @@ public class FixParserApp extends JFrame {
         }
 
         return dupCount;
+    }
+
+    private void exportToExcel() {
+        if (tableModel.getColumnCount() == 0 || tableModel.getRowCount() == 0) {
+            JOptionPane.showMessageDialog(this,
+                    "No data to export. Please parse FIX messages first.",
+                    "No Data",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Export to Excel");
+        fileChooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("Excel Files (*.xlsx)", "xlsx"));
+        fileChooser.setSelectedFile(new File("fix_messages.xlsx"));
+
+        int result = fileChooser.showSaveDialog(this);
+        if (result != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+
+        File file = fileChooser.getSelectedFile();
+        if (!file.getName().toLowerCase().endsWith(".xlsx")) {
+            file = new File(file.getAbsolutePath() + ".xlsx");
+        }
+
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            XSSFSheet sheet = workbook.createSheet("FIX Messages");
+
+            CellStyle headerStyle = workbook.createCellStyle();
+            XSSFFont headerFont = workbook.createFont();
+            headerFont.setBold(true);
+            headerStyle.setFont(headerFont);
+            headerStyle.setFillForegroundColor(IndexedColors.LIGHT_CORNFLOWER_BLUE.getIndex());
+            headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
+            org.apache.poi.ss.usermodel.Row headerRow = sheet.createRow(0);
+            for (int col = 0; col < tableModel.getColumnCount(); col++) {
+                org.apache.poi.ss.usermodel.Cell cell = headerRow.createCell(col);
+                cell.setCellValue(tableModel.getColumnName(col));
+                cell.setCellStyle(headerStyle);
+            }
+
+            for (int viewRow = 0; viewRow < resultsTable.getRowCount(); viewRow++) {
+                org.apache.poi.ss.usermodel.Row dataRow = sheet.createRow(viewRow + 1);
+                for (int col = 0; col < resultsTable.getColumnCount(); col++) {
+                    org.apache.poi.ss.usermodel.Cell cell = dataRow.createCell(col);
+                    Object value = resultsTable.getValueAt(viewRow, col);
+                    if (value instanceof Integer) {
+                        cell.setCellValue((Integer) value);
+                    } else if (value != null) {
+                        cell.setCellValue(value.toString());
+                    }
+                }
+            }
+
+            for (int col = 0; col < tableModel.getColumnCount(); col++) {
+                sheet.autoSizeColumn(col);
+            }
+
+            try (FileOutputStream fos = new FileOutputStream(file)) {
+                workbook.write(fos);
+            }
+
+            statusLabel.setText("Exported " + resultsTable.getRowCount() + " rows to " + file.getName());
+            JOptionPane.showMessageDialog(this,
+                    "Successfully exported to:\n" + file.getAbsolutePath(),
+                    "Export Complete",
+                    JOptionPane.INFORMATION_MESSAGE);
+
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Error exporting to Excel: " + ex.getMessage(),
+                    "Export Error",
+                    JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     public static void main(String[] args) {
