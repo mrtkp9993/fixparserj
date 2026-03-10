@@ -6,7 +6,6 @@ import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableRowSorter;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
-import javax.swing.tree.TreePath;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -15,13 +14,17 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
-import javax.swing.RowFilter;
+
+import com.formdev.flatlaf.FlatIntelliJLaf;
 
 public class FixParserApp extends JFrame {
 
@@ -34,6 +37,10 @@ public class FixParserApp extends JFrame {
     private JLabel statusLabel;
     private JTextField searchField;
     private TableRowSorter<DefaultTableModel> tableSorter;
+    private JCheckBox skipCommonFieldsCheckBox;
+    private JCheckBox skipHeartbeatCheckBox;
+    private static final Set<String> COMMON_TAGS = new HashSet<>(
+            Arrays.asList("8", "9", "35", "49", "56", "34", "52", "10"));
 
     public FixParserApp() {
         initializeGUI();
@@ -296,6 +303,17 @@ public class FixParserApp extends JFrame {
         });
         searchPanel.add(searchField);
 
+        skipCommonFieldsCheckBox = new JCheckBox("Skip Common Fields");
+        skipCommonFieldsCheckBox.setToolTipText(
+                "Hide common fields: BeginString(8), BodyLength(9), MsgType(35), SenderCompID(49), TargetCompID(56), MsgSeqNum(34), SendingTime(52), CheckSum(10)");
+        skipCommonFieldsCheckBox.addActionListener(e -> buildTableView());
+        searchPanel.add(skipCommonFieldsCheckBox);
+
+        skipHeartbeatCheckBox = new JCheckBox("Skip Heartbeat Messages");
+        skipHeartbeatCheckBox.setToolTipText("Hide heartbeat messages (MsgType(35) = '0')");
+        skipHeartbeatCheckBox.addActionListener(e -> buildTableView());
+        searchPanel.add(skipHeartbeatCheckBox);
+
         JScrollPane tableScrollPane = new JScrollPane(resultsTable);
         tableScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
         tablePanel.add(searchPanel, BorderLayout.NORTH);
@@ -454,9 +472,24 @@ public class FixParserApp extends JFrame {
         if (parsedMessages == null || parsedMessages.isEmpty())
             return;
 
-        LinkedHashSet<String> allTags = new LinkedHashSet<>();
+        boolean skipCommon = skipCommonFieldsCheckBox.isSelected();
+        boolean skipHeartbeats = skipHeartbeatCheckBox.isSelected();
+
+        List<Map<String, String>> filteredMessages = new ArrayList<>();
         for (Map<String, String> fields : parsedMessages) {
+            if (skipHeartbeats && "0".equals(fields.get("35"))) {
+                continue;
+            }
+            filteredMessages.add(fields);
+        }
+
+        LinkedHashSet<String> allTags = new LinkedHashSet<>();
+        for (Map<String, String> fields : filteredMessages) {
             allTags.addAll(fields.keySet());
+        }
+
+        if (skipCommon) {
+            allTags.removeAll(COMMON_TAGS);
         }
 
         List<String> tagList = new ArrayList<>(allTags);
@@ -474,8 +507,8 @@ public class FixParserApp extends JFrame {
             tableModel.addColumn(col);
         }
 
-        for (int m = 0; m < parsedMessages.size(); m++) {
-            Map<String, String> fields = parsedMessages.get(m);
+        for (int m = 0; m < filteredMessages.size(); m++) {
+            Map<String, String> fields = filteredMessages.get(m);
             Object[] row = new Object[tagList.size() + 1];
             row[0] = m + 1;
             for (int i = 0; i < tagList.size(); i++) {
@@ -567,6 +600,7 @@ public class FixParserApp extends JFrame {
     }
 
     public static void main(String[] args) {
+        FlatIntelliJLaf.setup();
         SwingUtilities.invokeLater(() -> {
             try {
                 new FixParserApp().setVisible(true);

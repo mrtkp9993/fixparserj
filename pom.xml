@@ -7,7 +7,7 @@
     
     <groupId>com.muratkoptur</groupId>
     <artifactId>fixparserj</artifactId>
-    <version>1.0.1</version>
+    <version>1.4.0</version>
     <packaging>jar</packaging>
     
     <name>FIXParserJ</name>
@@ -24,6 +24,11 @@
             <groupId>org.quickfixj</groupId>
             <artifactId>quickfixj-all</artifactId>
             <version>${quickfixj.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.formdev</groupId>
+            <artifactId>flatlaf</artifactId>
+            <version>3.7.1</version>
         </dependency>
     </dependencies>
     
@@ -61,6 +66,12 @@
                                             <exclude>META-INF/*.DSA</exclude>
                                             <exclude>META-INF/*.RSA</exclude>
                                         </excludes>
+                                    </filter>
+                                    <filter>
+                                        <artifact>com.formdev:flatlaf</artifact>
+                                        <includes>
+                                            <include>**</include>
+                                        </includes>
                                     </filter>
                                 </filters>
                         </configuration>
